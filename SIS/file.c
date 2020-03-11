@@ -3,14 +3,18 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <time.h>
 #include <pwd.h>
 #include <grp.h>
-
 #include <utmp.h>
 #include <sys/utsname.h>
-
 #include <unistd.h>
+
+char* formatdate(char* str, time_t val)
+{
+    strftime(str, 36, "%d.%m.%Y %H:%M:%S", localtime(&val));
+    return str;
+}
 
 void listDir(char *dirName, int choice) {
     DIR* dir;
@@ -22,6 +26,7 @@ void listDir(char *dirName, int choice) {
         perror ("Error while openning file");
         exit(1);
     }
+
     while ((dirEntry=readdir(dir)) != NULL) { 
         char fp[1000];
         snprintf(fp, sizeof(fp), "%s/%s", dirName, dirEntry->d_name);
@@ -33,8 +38,7 @@ void listDir(char *dirName, int choice) {
             struct group *gr = getgrgid(inode.st_gid);
             switch (choice) {
                 case 1:
-                    printf("OWNER: \n\tUsername: %s\n\tId: %d\n\tGroup: %s\n",pw->pw_name, pw->pw_uid, gr->gr_name);
-                    printf("\n");
+                    printf("OWNER: \n\tUsername: %s\n\tId: %d\n\tGroup: %s\n\n",pw->pw_name, pw->pw_uid, gr->gr_name);
                     break;
                 case 2:
                     printf("\n");
@@ -57,20 +61,36 @@ void listUsers() {
     printf("%s\n", "USERS:");
     while (u){
         if(u-> ut_type == USER_PROCESS){
-            printf("User: %s ID: %d\n", u->ut_user, getpwnam(u->ut_user)->pw_uid);
+            printf("Username: %s ID: %d\n", u->ut_user, getpwnam(u->ut_user)->pw_uid);
         }
         u = getutent();
     }
 }
 
+void save(char* text) {
+    FILE *file;
+    file =fopen("logs.txt", "a");
+    fprintf(file, "%s\n", text);
+    fclose(file);
+}
+
 void changeOwner(char *name, char *file, int id){
-    system("clear");
     char fp[1000];
-    snprintf(fp, sizeof(fp), "%s/%s", name, file);
-    if (chown(fp, id, id) == 0) {
-        printf("Owner of %s was changed successfully\n", file);
-    }else {
-        printf("Error while changing owner of %s\n", file);
+    char result[3000];
+    char t[36];
+    if (getpwuid(id) == NULL) { 
+        printf("User with id %d wasn't found\n", id);  
+    } else {
+        struct passwd *pw = getpwuid(id);
+        snprintf(fp, sizeof(fp), "%s/%s", name, file);
+        if (chown(fp, id, id) == 0) {
+            snprintf(result, sizeof(result), "%s %s %s %s %s", formatdate(t, time(NULL)), "Owner of file", file, "was changed to", pw->pw_name);
+            printf("Owner of file %s was changed successfully\n", file);
+        }else {
+            snprintf(result, sizeof(result), "%s %s\n", "Error while changing owner of", file);
+            printf("Error while changing owner of %s\n", file);
+        }
+        save(result);
     }
 }
 
@@ -87,6 +107,9 @@ void changePermission(char *name, char *file){
     scanf("%d",&choice);
     system("clear");
     while(choice != 4){
+        char result[1000];
+        char p[50];
+        char t[36];
         switch (choice) {
             case 1:
                 system("clear");
@@ -95,7 +118,7 @@ void changePermission(char *name, char *file){
                 printf( (inode.st_mode & S_IWUSR) ? " WRITE " : " - ");
                 printf( (inode.st_mode & S_IXUSR) ? " EXECUTE " : " - ");
                 int permission;
-                printf("\nType permission to change (1 - read, 2 - write, 3 - execute): ");
+                printf("\nType permission to change (1 - read, 2 - write, 3 - execute, 0 - back): ");
                 scanf("%d", &permission);
                 switch (permission) {
                     case 1:
@@ -105,6 +128,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IRUSR;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Owner read");
                         break;
                     case 2:
                         if (inode.st_mode & S_IWUSR){
@@ -113,6 +137,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IWUSR;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s","Owner write");
                         break;                        
                     case 3:
                        if (inode.st_mode & S_IXUSR){
@@ -121,11 +146,14 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IXUSR;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Owner execute");
                         break;
                     default:
                         break;
                 }
                 stat(fp,&inode);
+                snprintf(result, sizeof(result), "%s %s permission of file with path %s was changed",formatdate(t, inode.st_ctime), p, fp);
+                save(result);
                 system("clear");
                 printf("New permissions for owner: ");
                 printf( (inode.st_mode & S_IRUSR) ? " READ " : " - ");
@@ -139,7 +167,7 @@ void changePermission(char *name, char *file){
                 printf( (inode.st_mode & S_IRGRP) ? " READ " : " - ");
                 printf( (inode.st_mode & S_IWGRP) ? " WRITE " : " - ");
                 printf( (inode.st_mode & S_IXGRP) ? " EXECUTE " : " - ");
-                printf("\nType permission to change (1 - read, 2 - write, 3 - execute): ");
+                printf("\nType permission to change (1 - read, 2 - write, 3 - execute, 0 - back): ");
                 scanf("%d", &permission);
                 switch (permission) {
                     case 1:
@@ -149,6 +177,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IRGRP;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Group read");
                         break;
                     case 2:
                         if (inode.st_mode & S_IWGRP){
@@ -157,6 +186,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IWGRP;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Group write");
                         break;                        
                     case 3:
                        if (inode.st_mode & S_IXGRP){
@@ -165,11 +195,14 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IXGRP;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Group execute");
                         break;
                     default:
                         break;
                 }
                 stat(fp,&inode);
+                snprintf(result, sizeof(result), "%s %s permission of file with path %s was changed", formatdate(t, inode.st_ctime), p, fp);
+                save(result);
                 system("clear");
                 printf("New permissions for group: ");
                 printf( (inode.st_mode & S_IRGRP) ? " READ " : " - ");
@@ -183,7 +216,7 @@ void changePermission(char *name, char *file){
                 printf( (inode.st_mode & S_IROTH) ? " READ " : " - ");
                 printf( (inode.st_mode & S_IWOTH) ? " WRITE " : " - ");
                 printf( (inode.st_mode & S_IXOTH) ? " EXECUTE " : " - ");
-                printf("\nType permission to change (1 - read, 2 - write, 3 - execute): ");
+                printf("\nType permission to change (1 - read, 2 - write, 3 - execute, 0 - back): ");
                 scanf("%d", &permission);
                 switch (permission) {
                     case 1:
@@ -193,6 +226,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IROTH;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Others read");
                         break;
                     case 2:
                         if (inode.st_mode & S_IWOTH){
@@ -201,6 +235,7 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IWOTH;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Others write");
                         break;                        
                     case 3:
                        if (inode.st_mode & S_IXOTH){
@@ -209,11 +244,14 @@ void changePermission(char *name, char *file){
                             inode.st_mode |= S_IXOTH;
                         }
                         chmod(fp, inode.st_mode);
+                        snprintf(p, sizeof(p), "%s", "Others execute");
                         break;
                     default:
                         break;
                 }
                 stat(fp,&inode);
+                snprintf(result, sizeof(result), "%s %s permission of file with path %s was changed", formatdate(t, inode.st_ctime), p, fp);
+                save(result);
                 system("clear");
                 printf("New permissions for others: ");
                 printf( (inode.st_mode & S_IROTH) ? " READ " : " - ");
@@ -232,7 +270,6 @@ void changePermission(char *name, char *file){
 }
 
 int main(int argc, char **argv) {
-
     if (argc != 2) {
       printf ("Missed directory name\n");
       exit(0);
@@ -251,6 +288,7 @@ int main(int argc, char **argv) {
                 scanf("%s", name);
                 printf("New owner's ID: ");
                 scanf("%d", &id);
+                system("clear");
                 changeOwner(argv[1], name, id);
                 break;
             default:
@@ -259,11 +297,7 @@ int main(int argc, char **argv) {
                 changePermission(argv[1], name);
                 break;
         }
-        system("clear");
         printf("%s", "Choose function you want to execute:\n1.Change owner of file\n2.Change file permissions\n3.Stop program\n\nYour choice (number):");
         scanf("%d", &choice);
     }
-     printf("save");
-    
-    
 }
