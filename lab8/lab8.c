@@ -59,11 +59,7 @@ static int insertionSort(void *args) {
     int i = start, j, itemToInsert;
 
     while (i <= end) {
-        itemToInsert = unsorted[i]; //a must, or else unsorted[i] gets overwritten when shifting elements
-
-        //since everything in this sequence is sorted,
-        //starting from i, and going in reverse order, shift the elements to the right
-        //until an element less than unsorted[i] is found
+        itemToInsert = unsorted[i]; 
         j = i-1;
         while (j >= start && itemToInsert < unsorted[j])
         {
