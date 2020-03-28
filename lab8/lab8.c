@@ -6,7 +6,7 @@
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #define TAG "Lab8"
-#define MAX_NUM 1000000
+#define MAX_NUM 1000
 
 int unsorted[MAX_NUM];
 int sorted[MAX_NUM];
